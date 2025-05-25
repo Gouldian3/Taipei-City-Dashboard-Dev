@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import pluginVue from "eslint-plugin-vue";
 import globals from "globals";
+import prettier from "eslint-config-prettier";
 
 export default [
 	js.configs.recommended,
@@ -16,8 +17,30 @@ export default [
 		},
 		rules: {
 			indent: ["error", "tab"],
-			quotes: "off",
-			semi: "off",
+			"vue/html-self-closing": [
+				"error",
+				{
+					html: {
+						void: "always",
+						normal: "never",
+						component: "always",
+					},
+					svg: "always",
+					math: "always",
+				},
+			],
+			"vue/max-attributes-per-line": [
+				"error",
+				{
+					singleline: {
+						max: 1,
+					},
+					multiline: {
+						max: 1,
+					},
+				},
+			],
+			semi: ["error", "always"],
 			"spaced-comment": "off",
 			"no-console": ["error", { allow: ["warn", "error"] }],
 			"consistent-return": "off",
@@ -40,5 +63,6 @@ export default [
 			"vue/no-template-shadow": "off",
 		},
 	},
+	prettier,
 	{ ignores: ["**/public/", "**/dist/", "**/node_modules/", "*.json"] },
 ];
