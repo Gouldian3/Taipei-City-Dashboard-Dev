@@ -61,13 +61,14 @@ func ConnectToDatabases(dbNames ...interface{}) {
 func ConnectToDatabase(dbConfig global.DatabaseConfig) *gorm.DB {
 	// Constructing the database connection string using database configuration
 	dbargs := fmt.Sprintf(
-		"host=%s port=%s user=%s dbname=%s password=%s sslmode=disable",
+		"host=%s port=%s user=%s dbname=%s password=%s sslmode=require",
 		dbConfig.Host,
 		dbConfig.Port,
 		dbConfig.User,
 		dbConfig.DBName,
 		dbConfig.Password,
 	)
+	
 
 	// Establish a connection to the database using gorm.Open and the constructed connection string
 	dbConn, err := gorm.Open(postgres.Open(dbargs), &gorm.Config{})
