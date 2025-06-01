@@ -40,29 +40,51 @@ type componentQuery struct {
 	SearchByName  string `form:"searchbyname"`
 }
 
-// FIXME:
-// 這邊的 component 是半成品，無法直接使用
-// 缺少 components.index(component_charts.index)，後續需要設計流程補上
+/*
+CreateComponent creates a new component in the database.
+POST /api/v1/component/
+
+This function creates a complete component including:
+- Component basic information in components table
+- Query configuration in query_charts table  
+- Chart configuration in component_charts table
+
+The operation is performed within a database transaction to ensure data consistency.
+*/
 func CreateComponent(c *gin.Context) {
-	var component models.Component
-	var queryChart models.QueryCharts
 	var cityComponent models.CityComponent
 
-	// 1. Bind the request body to the component and make sure it's valid
-	err := c.ShouldBindJSON(&component)
+	// 1. Bind the request body to the cityComponent and validate
+	err := c.ShouldBindJSON(&cityComponent)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 
-	// 2. Create the component
-	cityComponent, err = models.CreateComponent(component.Index, component.Name, queryChart.City, queryChart.HistoryConfig, queryChart.MapFilter, queryChart.TimeFrom, queryChart.TimeTo, queryChart.UpdateFreq, queryChart.UpdateFreqUnit, queryChart.Source, queryChart.ShortDesc, queryChart.LongDesc, queryChart.UseCase, queryChart.Links, queryChart.Contributors)
+	// 2. Create the component with all related configurations
+	cityComponent, err = models.CreateComponent(
+		cityComponent.Index, 
+		cityComponent.Name, 
+		cityComponent.City, 
+		cityComponent.HistoryConfig, 
+		cityComponent.MapFilter, 
+		cityComponent.TimeFrom, 
+		cityComponent.TimeTo, 
+		cityComponent.UpdateFreq, 
+		cityComponent.UpdateFreqUnit, 
+		cityComponent.Source, 
+		cityComponent.ShortDesc, 
+		cityComponent.LongDesc, 
+		cityComponent.UseCase, 
+		cityComponent.Links, 
+		cityComponent.Contributors,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 
-	// 3. Return the component
+	// 3. Return the created component
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": cityComponent})
 }
 

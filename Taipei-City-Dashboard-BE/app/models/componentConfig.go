@@ -3,6 +3,7 @@ package models
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"time"
 
@@ -208,88 +209,125 @@ func GetComponentByIDAll(id int) (component []CityComponent, err error) {
 	return component, nil
 }
 
+/*
+CreateComponent creates a new component with all related configurations.
 
+This function performs the following operations within a database transaction:
+1. Creates a new component record in the components table
+2. Creates query configuration in the query_charts table
+3. Creates default chart configuration in the component_charts table
+
+Parameters:
+- index: Unique identifier for the component
+- name: Display name of the component
+- city: City scope for the component (taipei, metrotaipei, etc.)
+- Other parameters: Various configuration options for the component
+
+Returns the created CityComponent with all configurations populated.
+*/
 func CreateComponent(index string, name string, city string, historyConfig json.RawMessage, mapFilter json.RawMessage, timeFrom string, timeTo *string, updateFreq *int64, updateFreqUnit string, source string, shortDesc string, longDesc string, useCase string, links pq.StringArray, contributors pq.StringArray) (cityComponent CityComponent, err error) {
-    // component := Component{
-	// 	Index:			 index,
-    //     Name:            name,
-    //     // HistoryConfig:   historyConfig,
-    //     // MapFilter:       mapFilter,
-    //     // TimeFrom:        timeFrom,
-    //     // TimeTo:          timeTo,
-    //     // UpdateFreq:      updateFreq,
-    //     // UpdateFreqUnit:  updateFreqUnit,
-    //     // Source:          source,
-    //     // ShortDesc:       shortDesc,
-    //     // LongDesc:        longDesc,
-    //     // UseCase:         useCase,
-    //     // Links:           links,
-    //     // Contributors:    contributors,
-    //     // CreatedAt:       time.Now(),
-    //     // UpdatedAt:       time.Now(),
-    // }
+	// 1. Create component basic information
+	component := Component{
+		Index: index,
+		Name:  name,
+	}
 
-	// queryCharts := QueryCharts{
-	// 	City: city,
-	// 	HistoryConfig: historyConfig, 
-	// 	MapFilter: mapFilter, 
-	// 	TimeFrom: timeFrom, 
-	// 	TimeTo: timeTo, 
-	// 	UpdateFreq: updateFreq, 
-	// 	UpdateFreqUnit: updateFreqUnit, 
-	// 	Source: source, 
-	// 	ShortDesc: shortDesc, 
-	// 	LongDesc: longDesc, 
-	// 	UseCase: useCase, 
-	// 	Links: links, 
-	// 	Contributors: contributors, 
-	// 	CreatedAt: time.Now(),
-	// 	UpdatedAt: time.Now(),
-	// }
+	// 2. Create query charts configuration
+	queryCharts := QueryCharts{
+		Index:          index,
+		City:           city,
+		HistoryConfig:  historyConfig,
+		MapFilter:      mapFilter,
+		TimeFrom:       timeFrom,
+		TimeTo:         timeTo,
+		UpdateFreq:     updateFreq,
+		UpdateFreqUnit: updateFreqUnit,
+		Source:         source,
+		ShortDesc:      shortDesc,
+		LongDesc:       longDesc,
+		UseCase:        useCase,
+		Links:          links,
+		Contributors:   contributors,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		QueryType:      "two_d", // Default to two_d type
+		QueryChart:     "SELECT 'Sample Data' as x_axis, 100 as data", // Default sample query
+		QueryHistory:   "",
+	}
 
-	// cityComponent = CityComponent{
-	// 	Name: name,
-	// 	City: city,
-	// 	HistoryConfig: historyConfig, 
-	// 	MapFilter: mapFilter, 
-	// 	TimeFrom: timeFrom, 
-	// 	TimeTo: timeTo, 
-	// 	UpdateFreq: updateFreq, 
-	// 	UpdateFreqUnit: updateFreqUnit, 
-	// 	Source: source, 
-	// 	ShortDesc: shortDesc, 
-	// 	LongDesc: longDesc, 
-	// 	UseCase: useCase, 
-	// 	Links: links, 
-	// 	Contributors: contributors,
-	// 	CreatedAt: time.Now(),
-	// 	UpdatedAt: time.Now(),
-	// }
+	// 3. Create default chart configuration
+	chartConfig := ComponentChart{
+		Index: index,
+		Color: pq.StringArray{"#1f77b4", "#ff7f0e", "#2ca02c"},
+		Types: pq.StringArray{"BarChart"},
+		Unit:  "個",
+	}
 
-	// 建立 logic 還不確定，無法實作
-	// 首先建立 components => 其次建立 query_charts ，但是 query_charts 有多個城市，不確定是一個建立還是同時建立
+	// 4. Begin database transaction
+	tx := DBManager.Begin()
 
-    // err = DBManager.Table("components").Create(&component).Error
-    // if err != nil {
-    //     return component, err
-    // }
+	// 5. Check if component with same index already exists
+	var existingComponent Component
+	err = tx.Table("components").Where("index = ?", index).First(&existingComponent).Error
+	if err == nil {
+		tx.Rollback()
+		return cityComponent, errors.New("component with this index already exists")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		tx.Rollback()
+		return cityComponent, err
+	}
 
-	// var tmp Component
-	// err = DBManager.Table("components").Where("name = ?", name).First(&tmp).Error
-	// if err != nil && errors.Is(err, gorm.ErrRecordNotFound){
-	// 	err = DBManager.Table("components").Create(&component).Error
-	// 	if err != nil {
-	// 		return cityComponent, err
-	// 	}	
-	// }
+	// 6. Create component record
+	err = tx.Table("components").Create(&component).Error
+	if err != nil {
+		tx.Rollback()
+		return cityComponent, err
+	}
 
+	// 7. Create query charts record
+	err = tx.Table("query_charts").Create(&queryCharts).Error
+	if err != nil {
+		tx.Rollback()
+		return cityComponent, err
+	}
 
-	// err = DBManager.Table("query_charts").Create(&queryCharts).Error
-    // if err != nil {
-    //     return cityComponent, err
-    // }
+	// 8. Create component charts record
+	err = tx.Table("component_charts").Create(&chartConfig).Error
+	if err != nil {
+		tx.Rollback()
+		return cityComponent, err
+	}
 
-    return cityComponent, nil
+	// 9. Commit transaction
+	err = tx.Commit().Error
+	if err != nil {
+		return cityComponent, err
+	}
+
+	// 10. Return the created component with all configurations
+	cityComponent = CityComponent{
+		ID:             component.ID,
+		Index:          component.Index,
+		Name:           component.Name,
+		City:           city,
+		HistoryConfig:  historyConfig,
+		MapFilter:      mapFilter,
+		TimeFrom:       timeFrom,
+		TimeTo:         timeTo,
+		UpdateFreq:     updateFreq,
+		UpdateFreqUnit: updateFreqUnit,
+		Source:         source,
+		ShortDesc:      shortDesc,
+		LongDesc:       longDesc,
+		UseCase:        useCase,
+		Links:          links,
+		Contributors:   contributors,
+		CreatedAt:      queryCharts.CreatedAt,
+		UpdatedAt:      queryCharts.UpdatedAt,
+		QueryType:      queryCharts.QueryType,
+	}
+
+	return cityComponent, nil
 }
 
 func UpdateComponent(id int, city string, name string, historyConfig json.RawMessage, mapFilter json.RawMessage, timeFrom string, timeTo *string, updateFreq *int64, updateFreqUnit string, source string, shortDesc string, longDesc string, useCase string, links pq.StringArray, contributors pq.StringArray) (cityComponent CityComponent, err error) {
